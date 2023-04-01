@@ -56,6 +56,7 @@
 #include <mach/mach_time.h> // for mach_absolute_time()
 #include <sys/kdebug.h>     // for kdebug trace decode
 #include <sys/sysctl.h>     // for sysctl()
+#include <sys/wait.h>       // for waitpid()
 #include <unistd.h>         // for usleep()
 
 typedef float f32;
@@ -978,7 +979,7 @@ int main2(int argc, const char *argv[]) {
 
   // get events
   const usize ev_count = sizeof(profile_events) / sizeof(profile_events[0]);
-  kpep_event *ev_arr[ev_count] = {0};
+  kpep_event *ev_arr[ev_count];
   for (usize i = 0; i < ev_count; i++) {
     const event_alias *alias = profile_events + i;
     ev_arr[i] = get_event(db, alias);
@@ -1095,10 +1096,11 @@ static double get_timestamp(void) {
 #define PERF_KPC_DATA_THREAD (8)
 
 void usage(const char *exec) {
-  printf("%s [-p target_pid] [-t sample_time] [-s sample_period]\n", exec);
+  printf("%s [-p target_pid] [-t sample_time] [-s sample_period] -- cmd ...\n",
+         exec);
 }
 
-int main(int argc, const char *argv[]) {
+int main(int argc, char *const argv[]) {
   /// Target process pid, -1 for all thread.
   int target_pid = -1;
 
@@ -1107,6 +1109,9 @@ int main(int argc, const char *argv[]) {
 
   /// Profile sampler period in seconds (default 10ms).
   double sample_period = 0.001;
+
+  char *const *exec_argv;
+  int exec_argc;
 
   for (usize i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
@@ -1148,10 +1153,42 @@ int main(int argc, const char *argv[]) {
         i++;
       }
 
+    } else if (strcmp(argv[i], "--") == 0) {
+      if (argc <= i + 1) {
+        fprintf(stderr, "ERROR: -- must have at least one argument \n");
+        usage(argv[0]);
+        return 1;
+      }
+      exec_argc = argc - i - 1;
+      exec_argv = &argv[i + 1];
+      i = argc;
+
     } else {
       fprintf(stderr, "ERROR: Unknown option '%s'\n", argv[i]);
       usage(argv[0]);
       return 1;
+    }
+  }
+
+  if (target_pid != -1 && exec_argc > 0) {
+    fprintf(stderr, "ERROR: only one of target pid [-p] and exec mode [--] can "
+                    "be activated\n");
+    return 1;
+  }
+
+  if (exec_argc > 0) {
+    int pid = fork();
+    if (pid == -1) {
+      fprintf(stderr, "ERROR: fork() failed\n");
+      return 1;
+    } else if (pid == 0) {
+      // child
+      if (execvp(exec_argv[0], exec_argv) == -1) {
+        fprintf(stderr, "ERROR: unable to execute process\n");
+        return 1;
+      }
+    } else {
+      target_pid = pid;
     }
   }
 
@@ -1197,7 +1234,7 @@ int main(int argc, const char *argv[]) {
 
   // get events
   const usize ev_count = sizeof(profile_events) / sizeof(profile_events[0]);
-  kpep_event *ev_arr[ev_count] = {0};
+  kpep_event *ev_arr[ev_count];
   for (usize i = 0; i < ev_count; i++) {
     const event_alias *alias = profile_events + i;
     ev_arr[i] = get_event(db, alias);
@@ -1381,10 +1418,16 @@ int main(int argc, const char *argv[]) {
       buf_cur++;
     }
 
-    // stop when time is up
-    double now = get_timestamp();
-    if (now - begin > total_profile_time + sample_period)
-      break;
+    if (exec_argc > 0) {
+      int status = 0;
+      if (waitpid(target_pid, &status, WNOHANG) != 0)
+        break;
+    } else {
+      // stop when time is up
+      double now = get_timestamp();
+      if (now - begin > total_profile_time + sample_period)
+        break;
+    }
   }
 
   // stop tracing
