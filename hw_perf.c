@@ -260,10 +260,6 @@ static double get_timestamp(void) {
   return (double)now.tv_sec + (double)now.tv_usec / (1000.0 * 1000.0);
 }
 
-// debugid sub-classes and code from xnu source
-#define PERF_KPC (6)
-#define PERF_KPC_DATA_THREAD (8)
-
 void usage(const char *exec) {
   printf("%s [-p target_pid] [-s sample_period] -- cmd ...\n", exec);
 }
@@ -539,7 +535,6 @@ int main(int argc, char *const argv[]) {
   kd_buf *buf_cur = buf_hdr;
   kd_buf *buf_end = buf_hdr + buf_capacity;
 
-  double begin = get_timestamp();
   while (buf_hdr) {
     // wait for more buffer
     usleep(2 * sample_period * 1000000);

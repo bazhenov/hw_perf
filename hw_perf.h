@@ -651,3 +651,7 @@ typedef struct {
   /* the owning pid */
   int bufid;
 } kbufinfo_t;
+
+// debugid sub-classes and code from xnu source
+#define PERF_KPC (6)
+#define PERF_KPC_DATA_THREAD (8)
