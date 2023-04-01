@@ -265,16 +265,15 @@ static double get_timestamp(void) {
 #define PERF_KPC_DATA_THREAD (8)
 
 void usage(const char *exec) {
-  printf("%s [-p target_pid] [-t sample_time] [-s sample_period] -- cmd ...\n",
-         exec);
+  printf("%s [-p target_pid] [-s sample_period] -- cmd ...\n", exec);
 }
 
 int main(int argc, char *const argv[]) {
   /// Target process pid, -1 for all thread.
   int target_pid = -1;
 
-  /// Profile time in seconds.
-  double total_profile_time = 1;
+  /// pid of the process started using -- syntax
+  int cmd_pid = -1;
 
   /// Profile sampler period in seconds (default 10ms).
   double sample_period = 0.001;
@@ -310,17 +309,6 @@ int main(int argc, char *const argv[]) {
         sample_period = value;
         i++;
       }
-    } else if (strcmp(argv[i], "-t") == 0) {
-      if (argc <= i + 1) {
-        fprintf(stderr, "ERROR: -t must have value \n");
-        usage(argv[0]);
-        return 1;
-      }
-      int value = atoi(argv[i + 1]);
-      if (value > 0) {
-        total_profile_time = value;
-        i++;
-      }
 
     } else if (strcmp(argv[i], "--") == 0) {
       if (argc <= i + 1) {
@@ -330,7 +318,7 @@ int main(int argc, char *const argv[]) {
       }
       exec_argc = argc - i - 1;
       exec_argv = &argv[i + 1];
-      i = argc;
+      break;
 
     } else {
       fprintf(stderr, "ERROR: Unknown option '%s'\n", argv[i]);
@@ -339,9 +327,9 @@ int main(int argc, char *const argv[]) {
     }
   }
 
-  if (target_pid != -1 && exec_argc > 0) {
-    fprintf(stderr, "ERROR: only one of target pid [-p] and exec mode [--] can "
-                    "be activated\n");
+  if (exec_argc <= 0) {
+    fprintf(stderr,
+            "ERROR: tracing process should be provided using [--] syntax\n");
     return 1;
   }
 
@@ -357,7 +345,12 @@ int main(int argc, char *const argv[]) {
         return 1;
       }
     } else {
-      target_pid = pid;
+      cmd_pid = pid;
+      // if target_pid is provided by the use we'll use cmd process only
+      // as a mean to wait for a given amount of time
+      if (target_pid == -1) {
+        target_pid = pid;
+      }
     }
   }
 
@@ -587,16 +580,9 @@ int main(int argc, char *const argv[]) {
       buf_cur++;
     }
 
-    if (exec_argc > 0) {
-      int status = 0;
-      if (waitpid(target_pid, &status, WNOHANG) != 0)
-        break;
-    } else {
-      // stop when time is up
-      double now = get_timestamp();
-      if (now - begin > total_profile_time + sample_period)
-        break;
-    }
+    int status = 0;
+    if (waitpid(cmd_pid, &status, WNOHANG) != 0)
+      break;
   }
 
   // stop tracing

@@ -18,7 +18,7 @@ Tracing requires root privileges.
    ```console
    # hw_perf -- target_process
    ```
-1. profiling existing pid for a given amount of time (in seconds)
+1. profiling existing pid for a 5 seconds
    ```console
-   # hw_perf -p `pgrep my-process` -t 5
+   # hw_perf -p `pgrep my-process` -- sleep 5
    ```
