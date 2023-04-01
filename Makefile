@@ -1,2 +1,2 @@
-kpc_demo: kpc_demo.c
+hw_perf: hw_perf.c
 	gcc -o $@ $<
