@@ -690,7 +690,17 @@ int main(int argc, char *const argv[]) {
     }
   }
 
-  u64 counters_sum[KPC_MAX_COUNTERS] = {0};
+  printf("\n");
+  printf("  Perfomance counters stats for '");
+  for (size_t i = 0; i < exec_argc; i++) {
+    if (i > 0) {
+      printf(" ");
+    }
+    printf("%s", exec_argv[i]);
+  }
+  printf("'\n");
+  printf("\n");
+
   for (usize i = 0; i < thread_count; i++) {
     kpc_thread_data *data = thread_data + i;
     if (!data->timestamp_0 || !data->timestamp_1)
@@ -700,27 +710,16 @@ int main(int argc, char *const argv[]) {
     for (usize c = 0; c < counter_count; c++) {
       counters_one[c] += data->counters_1[c] - data->counters_0[c];
     }
-    printf("------------------------\n");
-    printf("thread: %u, trace time: %f\n", data->tid,
-           kperf_ticks_to_ns(data->timestamp_1 - data->timestamp_0) /
-               1000000000.0);
+
+    printf("  thread: %u\n\n", data->tid);
     for (usize i = 0; i < ev_count; i++) {
       const event_alias *alias = profile_events + i;
       u64 val = counters_one[counter_map[i]];
-      printf("%14s: %llu\n", alias->alias, val);
+      printf(" %12llu %-14s # %-30s\n", val, alias->alias, ev_arr[i]->name);
     }
-
-    for (usize c = 0; c < counter_count; c++) {
-      counters_sum[c] += counters_one[c];
-    }
-  }
-
-  printf("------------------------\n");
-  printf("all threads:\n");
-  for (usize i = 0; i < ev_count; i++) {
-    const event_alias *alias = profile_events + i;
-    u64 val = counters_sum[counter_map[i]];
-    printf("%14s: %llu\n", alias->alias, val);
+    printf(" %12.6f seconds elapsed\n\n",
+           kperf_ticks_to_ns(data->timestamp_1 - data->timestamp_0) /
+               1000000000.0);
   }
 
   // TODO: free memory
