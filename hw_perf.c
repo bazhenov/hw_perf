@@ -717,6 +717,17 @@ int main(int argc, char *const argv[]) {
   printf("'\n");
   printf("\n");
 
+  // Sort thread_data array by thread id
+  for (usize i = 0; i < thread_count - 1; i++) {
+    for (usize j = i + 1; j < thread_count; j++) {
+      if (thread_data[i].tid > thread_data[j].tid) {
+        kpc_thread_data temp = thread_data[i];
+        thread_data[i] = thread_data[j];
+        thread_data[j] = temp;
+      }
+    }
+  }
+
   for (usize i = 0; i < thread_count; i++) {
     kpc_thread_data *data = thread_data + i;
     if (!data->timestamp_0 || !data->timestamp_1)
@@ -733,9 +744,17 @@ int main(int argc, char *const argv[]) {
       u64 val = counters_one[counter_map[i]];
       printf(" %12llu %-14s # %-30s\n", val, alias->alias, ev_arr[i]->name);
     }
-    printf(" %12.6f seconds elapsed\n\n",
+    printf(" %12.6f seconds elapsed\n",
            kperf_ticks_to_ns(data->timestamp_1 - data->timestamp_0) /
                1000000000.0);
+
+    // Calculating IPC. Here we're relying on the fact that cycles and instructions
+    // are the firt two metrics defined in the profile_events array
+    u64 cycles = counters_one[counter_map[0]];
+    u64 instructions = counters_one[counter_map[1]];
+    printf(" %12.2f IPC\n", (f64)instructions / cycles);
+
+    printf("\n");
   }
 
   // TODO: free memory
